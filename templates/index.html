@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Advanced File Organizer & Security Scanner</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .log-output::-webkit-scrollbar { width: 6px; }
+    .log-output::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+    .log-output::-webkit-scrollbar-track { background: #1f2937; }
+    body { font-family: 'Inter', sans-serif; }
+
+    .collapsible-content {
+      transition: max-height 0.3s ease-out, padding 0.3s ease-out;
+      max-height: 0;
+      overflow: hidden;
+    }
+    .collapsible-content.expanded {
+      max-height: 2000px;
+      padding-top: 1rem;
+      padding-bottom: 1rem;
+    }
+
+    /* --- Chatbot Styling --- */
+    #chatbot-button {
+      position: fixed;
+      bottom: 30px;
+      right: 30px;
+      background-color: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 50%;
+      width: 60px;
+      height: 60px;
+      font-size: 24px;
+      cursor: pointer;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+      z-index: 50;
+      transition: transform 0.2s ease;
+    }
+    #chatbot-button:hover { transform: scale(1.1); }
+
+    #chatbot-window {
+      position: fixed;
+      bottom: 100px;
+      right: 30px;
+      width: 320px;
+      background: #1f2937;
+      color: #f3f4f6;
+      border-radius: 1rem;
+      box-shadow: 0 0 20px rgba(0,0,0,0.4);
+      display: none;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 50;
+    }
+    #chatbot-header {
+      background: #3b82f6;
+      color: white;
+      padding: 0.75rem;
+      font-weight: bold;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    #chatbot-messages {
+      padding: 1rem;
+      max-height: 300px;
+      overflow-y: auto;
+    }
+    .chat-msg {
+      margin-bottom: 0.75rem;
+    }
+    .chat-user {
+      text-align: right;
+      color: #facc15;
+    }
+    .chat-bot {
+      text-align: left;
+      color: #60a5fa;
+    }
+    #chatbot-input-area {
+      display: flex;
+      border-top: 1px solid #374151;
+    }
+    #chatbot-input {
+      flex-grow: 1;
+      padding: 0.75rem;
+      background: #111827;
+      border: none;
+      color: #f3f4f6;
+      outline: none;
+    }
+    #chatbot-send {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 0.75rem 1rem;
+      cursor: pointer;
+    }
+  </style>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            'primary': '#1f2937',
+            'secondary': '#374151',
+            'accent': '#3b82f6',
+            'text-light': '#f3f4f6',
+            'text-muted': '#9ca3af',
+          }
+        }
+      }
+    }
+  </script>
+</head>
+<body class="bg-black text-text-light min-h-screen p-4 sm:p-8">
+  <div class="max-w-6xl mx-auto">
+    <header class="text-center mb-8">
+      <h1 class="text-4xl font-extrabold text-blue-500 mb-2">FileGuard Organizer</h1>
+      <p class="text-yellow-400 text-muted">Automated File Management with Integrated ClamAV Security Scan</p>
+    </header>
+
+    {% if message %}
+      <div id="message-alert" class="bg-yellow-500 text-gray-900 p-4 rounded-lg shadow-xl mb-6 flex items-center justify-between transition-all duration-300">
+        <span class="font-semibold">{{ message }}</span>
+        <button onclick="document.getElementById('message-alert').remove()" class="text-gray-900 hover:text-red-700 font-bold ml-4">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd" />
+          </svg>
+        </button>
+      </div>
+    {% endif %}
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+
+      <div class="lg:col-span-3 bg-black p-6 rounded-xl shadow-2xl border border-gray-700">
+        <h2 class="text-2xl text-yellow-400 font-bold mb-6 border-b border-gray-700 pb-3">Run File Organization</h2>
+        <form method="POST" action="/">
+          <div class="mb-4">
+            <label for="target_path" class="block text-sm font-medium text-blue-500 text-muted mb-2">Target Folder Path</label>
+            <input type="text" name="target_path" id="target_path" placeholder="/path/to/your/files" required class="w-full p-3 bg-black border border-gray-600 rounded-lg focus:ring-accent focus:border-accent text-text-light placeholder-gray-500">
+          </div>
+
+
+          <div class="grid grid-cols-2 gap-4 mb-6">
+            {% set options = [
+              ('dry_run_mode', 'Scan without organize', 'Moves without changing files.'),
+              ('recursive_mode', 'Recursive Scan', 'Organize files in subdirectories.'),
+              ('archive_mode', 'Archive Mode', 'Sort into YYYY/MM folders based on modification date.'),
+              ('delete_empty_folders', 'Delete Empty Folders', 'Remove source subfolders after organizing ( please enable Recursive Scan ).')
+            ] %}
+
+            {% for name, label, description in options %}
+            <label for="{{ name }}" class="flex items-center p-3 bg-black rounded-lg cursor-pointer hover:bg-blue-500 transition duration-150 border border-gray-600">
+              <input type="checkbox" id="{{ name }}" name="{{ name }}" class="h-5 w-5 text-accent rounded focus:ring-accent bg-gray-600 border-gray-500">
+              <div class="ml-3">
+                <span class="text-text-light font-semibold block">{{ label }}</span>
+                <span class="text-xs text-text-muted hidden sm:block">{{ description }}</span>
+              </div>
+            </label>
+            {% endfor %}
+          </div>
+
+          <button type="submit" class="w-full bg-blue-500 hover:bg-yellow-400 hover:shadow-yellow-400/50 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg shadow-blue-500/50 flex items-center justify-center">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+            </svg>
+            Start Scan & Organize
+          </button>
+        </form>
+      </div>
+
+      <div class="lg:col-span-3 bg-black p-6 rounded-xl shadow-2xl border border-gray-700">
+        <div class="flex justify-between items-center pb-3 cursor-pointer" id="config-header">
+          <h2 class="text-2xl text-yellow-400 font-bold">Custom Category Configuration</h2>
+          <button id="toggle-config-btn" type="button" class="text-text-muted hover:text-accent p-2 rounded-full transition duration-150 focus:outline-none">
+            <svg id="toggle-icon" xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 transform rotate-90 transition-transform duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="config-content" class="collapsible-content">
+          <p class="text-sm text-text-muted mb-4">Define up to 10 categories. Extensions should be comma-separated (e.g., `zip, rar, 7z`).</p>
+          <form method="POST" action="/save_config" id="config-form">
+            <div class="space-y-3">
+              {% for i in range(10) %}
+              <div class="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <input type="text" name="category_name_{{ i }}" placeholder="Category Name (e.g., Photos)"
+                       value="{{ config_data[i].name if i < config_data|length else '' }}"
+                       class="sm:col-span-1 p-2 bg-black border border-gray-600 rounded-lg focus:ring-accent focus:border-accent text-text-light placeholder-gray-500 text-sm">
+
+                <input type="text" name="category_exts_{{ i }}" placeholder="Extensions (e.g., jpg, jpeg, png)"
+                       value="{{ config_data[i].exts_str if i < config_data|length else '' }}"
+                       class="sm:col-span-2 p-2 bg-black border border-gray-600 rounded-lg focus:ring-accent focus:border-accent text-text-light placeholder-gray-500 text-sm">
+              </div>
+              {% endfor %}
+            </div>
+
+            <button type="submit" class="mt-6 w-full bg-blue-500 hover:bg-yellow-400 hover:shadow-yellow-400/50 text-white font-bold py-3 px-4 rounded-lg transition duration-200 shadow-lg shadow-blue-500/50 flex items-center justify-center">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M8 7H5a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3-3m0 0l-3 3m3-3v12" />
+              </svg>
+              Save Configuration
+            </button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Floating Chatbot -->
+  <button id="chatbot-button">💬</button>
+
+  <div id="chatbot-window" class="flex">
+    <div id="chatbot-header">
+      FileGuard Assistant
+      <button id="chatbot-close" class="text-white hover:text-yellow-300">✕</button>
+    </div>
+    <div id="chatbot-messages"></div>
+    <div id="chatbot-input-area">
+      <input type="text" id="chatbot-input" placeholder="Ask something...">
+      <button id="chatbot-send">Send</button>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      const toggleBtn = document.getElementById('toggle-config-btn');
+      const configContent = document.getElementById('config-content');
+      const toggleIcon = document.getElementById('toggle-icon');
+
+      const togglePanel = () => {
+        const isExpanded = configContent.classList.toggle('expanded');
+        toggleIcon.classList.toggle('rotate-0', isExpanded);
+        toggleIcon.classList.toggle('rotate-90', !isExpanded);
+      };
+      toggleBtn.addEventListener('click', togglePanel);
+      document.getElementById('config-header').addEventListener('click', e => {
+        if (e.target !== toggleBtn && !toggleBtn.contains(e.target)) togglePanel();
+      });
+
+      // --- Chatbot Logic ---
+      const chatbotButton = document.getElementById('chatbot-button');
+      const chatbotWindow = document.getElementById('chatbot-window');
+      const chatbotClose = document.getElementById('chatbot-close');
+      const chatbotMessages = document.getElementById('chatbot-messages');
+      const chatbotInput = document.getElementById('chatbot-input');
+      const chatbotSend = document.getElementById('chatbot-send');
+
+      chatbotButton.onclick = () => chatbotWindow.style.display = 'flex';
+      chatbotClose.onclick = () => chatbotWindow.style.display = 'none';
+
+      const appendMessage = (text, cls) => {
+        const div = document.createElement('div');
+        div.className = `chat-msg ${cls}`;
+        div.textContent = text;
+        chatbotMessages.appendChild(div);
+        chatbotMessages.scrollTop = chatbotMessages.scrollHeight;
+      };
+
+      const sendMessage = async () => {
+        const msg = chatbotInput.value.trim();
+        if (!msg) return;
+        appendMessage(msg, 'chat-user');
+        chatbotInput.value = '';
+        try {
+          const res = await fetch('/chatbot', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+            body: `user_message=${encodeURIComponent(msg)}`
+          });
+          const data = await res.json();
+          appendMessage(data.response, 'chat-bot');
+        } catch {
+          appendMessage('Error: could not reach the assistant.', 'chat-bot');
+        }
+      };
+
+      chatbotSend.onclick = sendMessage;
+      chatbotInput.addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+    });
+  </script>
+</body>
+</html>
